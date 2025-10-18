@@ -1,1 +1,1 @@
-# anomaly-detection-welding-yolo-cnn
+# wielding_anomaly

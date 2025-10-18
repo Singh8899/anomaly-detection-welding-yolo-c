@@ -1,0 +1,7 @@
+numpy
+PyYAML
+matplotlib
+scikit-learn
+tqdm
+ultralytics
+tqdm
