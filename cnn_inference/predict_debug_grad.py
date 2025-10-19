@@ -1,11 +1,12 @@
 import logging
 from formatter import draw_boxes
 
+import os
 import cv2
 import numpy as np
 import torch
 import torch.nn as nn
-from classes import Detection, InferenceResponse
+from classes import InferenceResponse
 from ultralytics import YOLO
 from torchvision import transforms, models
 from PIL import Image
@@ -13,6 +14,9 @@ from PIL import Image
 from pytorch_grad_cam import GradCAM, HiResCAM, ScoreCAM, GradCAMPlusPlus, AblationCAM, XGradCAM, EigenCAM, FullGrad
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
 from pytorch_grad_cam.utils.image import show_cam_on_image
+
+image_path = 'examples/20250730_190642_222398.jpeg'
+output_dir = 'grad_results'
 
 logger = logging.getLogger(__name__)
 
@@ -174,7 +178,10 @@ class ResnetInference:
                             )
 
                             visualization = show_cam_on_image(roi_rgb_float, grayscale_cam_resized, use_rgb=True)
-                            cv2.imwrite(f"gradcam_overlay_{i}.jpg", cv2.cvtColor(visualization, cv2.COLOR_RGB2BGR))
+                            output_filename = f"gradcam_overlay_{i}.jpg"
+                            complete_path = output_dir+"/"+output_filename
+                            os.makedirs(output_dir, exist_ok=True)
+                            cv2.imwrite(complete_path, cv2.cvtColor(visualization, cv2.COLOR_RGB2BGR))
                         
 
             return {"predictions": boxes}
@@ -185,7 +192,6 @@ class ResnetInference:
             
 resnetInference = ResnetInference()
 
-image_path = '20250730_190642_222398.jpeg'
 # Read image as bytes
 with open(image_path, 'rb') as f:
     image_bytes = f.read()
@@ -204,8 +210,5 @@ inference_response = InferenceResponse(predictions=output["predictions"])
 # Draw boxes on the original image
 annotated_image = draw_boxes(original_image, inference_response, inference_size=IMAGE_SIZE)
 
-# Save the annotated image
-output_filename = 'annotated_image.jpg'
-cv2.imwrite(output_filename, annotated_image)
-print(f"Annotated image saved as: {output_filename}")
+print(f"Annotated images saved in: {output_dir}")
 print(f"Found {len(inference_response.predictions)} detections")
