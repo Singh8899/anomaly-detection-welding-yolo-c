@@ -1,6 +1,7 @@
 import logging
 from formatter import draw_boxes
 
+import os
 import cv2
 import numpy as np
 import torch
@@ -9,6 +10,9 @@ from classes import Detection, InferenceResponse
 from ultralytics import YOLO
 from torchvision import transforms, models
 from PIL import Image
+
+output_dir = 'pred_results'
+image_path = 'examples/20250730_190642_222398.jpeg'
 
 logger = logging.getLogger(__name__)
 
@@ -162,8 +166,6 @@ class ResnetInference:
             raise e
             
 resnetInference = ResnetInference()
-
-image_path = '20250730_190642_222398.jpeg'
 # Read image as bytes
 with open(image_path, 'rb') as f:
     image_bytes = f.read()
@@ -184,7 +186,9 @@ annotated_image = draw_boxes(original_image, inference_response, inference_size=
 
 # Save the annotated image
 output_filename = 'annotated_image.jpg'
-cv2.imwrite(output_filename, annotated_image)
+complete_path = output_dir+"/"+output_filename
+os.makedirs(output_dir, exist_ok=True)
+cv2.imwrite(complete_path, annotated_image)
 print(f"Annotated image saved as: {output_filename}")
 print(f"Found {len(inference_response.predictions)} detections")
 
@@ -261,7 +265,9 @@ if os.path.exists(xml_path):
         gt_objects = load_voc_annotations(xml_path)
         annotated_gt_image = draw_gt_boxes(original_image, gt_objects)
         gt_output_filename = 'annotated_image_gt.jpg'
-        cv2.imwrite(gt_output_filename, annotated_gt_image)
+        complete_path = output_dir+"/"+gt_output_filename
+        os.makedirs(output_dir, exist_ok=True)
+        cv2.imwrite(complete_path, annotated_gt_image)
         print(f"GT annotated image saved as: {gt_output_filename}")
         print(f"Found {len(gt_objects)} ground-truth boxes")
     except Exception as e:

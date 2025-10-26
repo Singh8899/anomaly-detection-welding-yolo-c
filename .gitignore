@@ -1,4 +1,11 @@
-/downloaded_photos
+/cnn_train/cnn/extracted_welds/
+/cnn_train/cnn/runs/
+/cnn_train/yolo/dataset/
+/cnn_train/yolo/runs/
+/cnn_inference/grad_results/
+/cnn_inference/pred_results/
+*.pth
+*.pt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
