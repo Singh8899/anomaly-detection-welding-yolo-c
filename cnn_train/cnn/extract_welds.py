@@ -19,7 +19,7 @@ load_dotenv(find_dotenv())
 class WeldExtractor:
     """Extract welding regions from images using XML annotations"""
 
-    def __init__(self, target_short_side=256, margin=12, pad_multiple=32):
+    def __init__(self, target_short_side=224, margin=12, pad_multiple=32):
         """
         Initialize the extractor
 
@@ -218,7 +218,7 @@ def main():
 
     # Initialize extractor
     extractor = WeldExtractor(
-        target_short_side=256,  # Short side = 256px
+        target_short_side=224,  # Short side = 224
         margin=12,  # 12px margin around each box
         pad_multiple=32,  # Pad to multiples of 32 (ResNet stride)
     )

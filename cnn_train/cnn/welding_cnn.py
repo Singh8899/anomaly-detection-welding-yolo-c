@@ -238,7 +238,7 @@ class WeldingClassifier:
     """ResNet-50 based welding binary classifier"""
     
     def __init__(self, train_data_dir, val_data_dir=None, test_data_dir=None, device=None, 
-                 target_size=(672, 224), short_side=224):
+                 target_size=(672, 224)):
         """
         Initialize welding classifier
         
@@ -258,7 +258,6 @@ class WeldingClassifier:
         print(f"Using device: {self.device}")
         
         self.target_size = target_size
-        self.short_side = short_side
         
         # Data transforms
         self.train_transform = transforms.Compose([
@@ -814,7 +813,6 @@ def main():
         val_data_dir=str(val_dir),
         test_data_dir=None,
         target_size=(672, 224),  # Height x Width - good for weld seams
-        short_side=224
     )
     if args.mode == "train":
         print("=== Training ResNet-50 Welding Classifier ===")

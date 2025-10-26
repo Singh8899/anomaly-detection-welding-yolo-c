@@ -17,7 +17,7 @@ IMAGE_SIZE = 896  # Default image size for inference
 class LetterboxResize:
     """Enhanced letterbox resize for optimal quality"""
     
-    def __init__(self, target_size=(224, 672)):
+    def __init__(self, target_size=(672, 224)):
         self.target_size = target_size
     
     def __call__(self, image):
@@ -83,7 +83,7 @@ class ResnetInference:
         checkpoint = torch.load("cnn.pth", map_location=self.device, weights_only=False)
         self.cnn_model.load_state_dict(checkpoint['model_state_dict'])
         self.cnn_model.to(self.device).eval()
-        target_size=(224, 672)
+        target_size=(672, 224)  # (height, width) - must match training
         # CNN transform
         self.cnn_transform = transforms.Compose([
             LetterboxResize(target_size=target_size),
