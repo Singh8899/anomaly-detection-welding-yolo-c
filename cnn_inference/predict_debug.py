@@ -12,7 +12,7 @@ from torchvision import transforms, models
 from PIL import Image
 
 output_dir = 'pred_results'
-image_path = 'examples/20250730_190642_222398.jpeg'
+image_path = 'examples/20250721_154817_360058.jpeg'
 
 logger = logging.getLogger(__name__)
 
@@ -167,30 +167,33 @@ class ResnetInference:
             
 resnetInference = ResnetInference()
 # Read image as bytes
-with open(image_path, 'rb') as f:
-    image_bytes = f.read()
 
-# Also read the original image for drawing boxes
-original_image = cv2.imread(image_path)
+for image_path in clode:
 
-output = resnetInference.predict(
-    image=image_bytes,
-    yolo_threshold=0.5,
-    cnn_threshold=0.5
-)
-# Create InferenceResponse object
-inference_response = InferenceResponse(predictions=output["predictions"])
+    with open(image_path, 'rb') as f:
+        image_bytes = f.read()
 
-# Draw boxes on the original image
-annotated_image = draw_boxes(original_image, inference_response, inference_size=IMAGE_SIZE)
+    # Also read the original image for drawing boxes
+    original_image = cv2.imread(image_path)
 
-# Save the annotated image
-output_filename = 'annotated_image.jpg'
-complete_path = output_dir+"/"+output_filename
-os.makedirs(output_dir, exist_ok=True)
-cv2.imwrite(complete_path, annotated_image)
-print(f"Annotated image saved as: {output_filename}")
-print(f"Found {len(inference_response.predictions)} detections")
+    output = resnetInference.predict(
+        image=image_bytes,
+        yolo_threshold=0.5,
+        cnn_threshold=0.5
+    )
+    # Create InferenceResponse object
+    inference_response = InferenceResponse(predictions=output["predictions"])
+
+    # Draw boxes on the original image
+    annotated_image = draw_boxes(original_image, inference_response, inference_size=IMAGE_SIZE)
+
+    # Save the annotated image
+    output_filename = 'annotated_image.jpg'
+    complete_path = output_dir+"/"+output_filename
+    os.makedirs(output_dir, exist_ok=True)
+    cv2.imwrite(complete_path, annotated_image)
+    print(f"Annotated image saved as: {output_filename}")
+    print(f"Found {len(inference_response.predictions)} detections")
 
 
 import os
