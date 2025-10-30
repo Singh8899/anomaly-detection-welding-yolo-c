@@ -378,12 +378,15 @@ class WeldingClassifier:
         
         print(f"Model initialized with {sum(p.numel() for p in self.model.parameters() if p.requires_grad):,} trainable parameters")
     
-    def train_epoch(self, dataloader):
-        """Train for one epoch"""
+    def train_epoch(self, dataloader, val_dataloader=None, val_interval_steps=None, 
+                    global_step=0, save_dir=None, best_val_f1=0.0, best_model_state=None, 
+                    patience_counter=0, patience=5):
+        """Train for one epoch with optional step-based validation"""
         self.model.train()
         running_loss = 0.0
         all_preds = []
         all_labels = []
+        
         with tqdm(dataloader, desc="Training") as pbar:
             for batch in pbar:
                 images = batch['image'].to(self.device)
@@ -398,6 +401,7 @@ class WeldingClassifier:
                 self.optimizer.step()
 
                 running_loss += loss.item()
+                global_step += 1
 
                 # For metrics
                 probs = torch.sigmoid(outputs)
@@ -407,13 +411,53 @@ class WeldingClassifier:
                 # Update tqdm with real-time loss
                 pbar.set_postfix({
                     "batch_loss": loss.item(),
-                    "avg_loss": running_loss / (len(all_preds) // labels.size(0))
+                    "avg_loss": running_loss / (len(all_preds) // labels.size(0)),
+                    "step": global_step
                 })
+                
+                # Step-based validation
+                if val_interval_steps is not None and val_dataloader is not None:
+                    if global_step % val_interval_steps == 0:
+                        print(f"\n--- Validation at step {global_step} ---")
+                        val_loss, val_auc, val_pr_auc, val_f1, acc, prec, rec = self.validate(
+                            val_dataloader, save_dir
+                        )
+                        print(f"Val - Loss: {val_loss:.4f}, AUC: {val_auc:.4f}, PR-AUC: {val_pr_auc:.4f}, "
+                              f"ACC: {acc:.4f}, PREC: {prec:.4f}, REC: {rec:.4f}, F1: {val_f1:.4f}")
+                        
+                        # Check for improvement
+                        if val_f1 > best_val_f1:
+                            best_val_f1 = val_f1
+                            patience_counter = 0
+                            best_model_state = copy.deepcopy(self.model.state_dict())
+                            
+                            # Save best model
+                            torch.save({
+                                'model_state_dict': best_model_state,
+                                'optimizer_state_dict': self.optimizer.state_dict(),
+                                'global_step': global_step,
+                                'best_f1': best_val_f1,
+                            }, Path(save_dir) / 'best_model.pth')
+                            
+                            print(f"New best F1: {best_val_f1:.4f} at step {global_step}")
+                        else:
+                            patience_counter += 1
+                            print(f"No improvement. Patience: {patience_counter}/{patience}")
+                        
+                        # Check early stopping
+                        if patience_counter >= patience:
+                            print(f"Early stopping triggered at step {global_step}")
+                            return (running_loss / len(dataloader), 
+                                    roc_auc_score(all_labels, all_preds) if len(set(all_labels)) > 1 else 0.0,
+                                    global_step, best_val_f1, best_model_state, patience_counter, True)
+                        
+                        # Return to training mode
+                        self.model.train()
         
         avg_loss = running_loss / len(dataloader)
         auc = roc_auc_score(all_labels, all_preds) if len(set(all_labels)) > 1 else 0.0
         
-        return avg_loss, auc
+        return avg_loss, auc, global_step, best_val_f1, best_model_state, patience_counter, False
     
     def validate(self, dataloader, checkpoints_dir):
         """Validate the model"""
@@ -477,15 +521,16 @@ class WeldingClassifier:
             
         return avg_loss, auc, pr_auc, best_f1, acc, prec, rec
     
-    def train(self, epochs=30, batch_size=32, patience=5, save_dir='./checkpoints'):
+    def train(self, epochs=30, batch_size=32, patience=5, save_dir='./checkpoints', val_interval_steps=100):
         """
-        Train the model with early stopping
+        Train the model with step-based validation and early stopping
         
         Args:
             epochs (int): Maximum number of epochs
             batch_size (int): Batch size
             patience (int): Early stopping patience
             save_dir (str): Directory to save checkpoints
+            val_interval_steps (int): Run validation every N steps
         """
         save_path = Path(save_dir)
         save_path.mkdir(parents=True, exist_ok=True)
@@ -495,6 +540,9 @@ class WeldingClassifier:
         
         if 'train' not in dataloaders:
             raise ValueError("Training data not found")
+        
+        if 'val' not in dataloaders:
+            raise ValueError("Validation data not found")
         
         # Initialize model
         self.initialize_model()
@@ -508,57 +556,38 @@ class WeldingClassifier:
         best_val_f1 = 0.0
         patience_counter = 0
         best_model_state = None
+        global_step = 0
         
         print(f"\n=== Starting Training ===")
         print(f"Epochs: {epochs}, Batch Size: {batch_size}, Patience: {patience}")
+        print(f"Validation Interval: Every {val_interval_steps} steps")
         
         for epoch in range(epochs):
             print(f"\nEpoch {epoch+1}/{epochs}")
             
-            # Training
-            train_loss, train_auc = self.train_epoch(dataloaders['train'])
+            # Training with step-based validation
+            train_loss, train_auc, global_step, best_val_f1, best_model_state, patience_counter, early_stop = \
+                self.train_epoch(
+                    dataloaders['train'],
+                    val_dataloader=dataloaders['val'],
+                    val_interval_steps=val_interval_steps,
+                    global_step=global_step,
+                    save_dir=save_dir,
+                    best_val_f1=best_val_f1,
+                    best_model_state=best_model_state,
+                    patience_counter=patience_counter,
+                    patience=patience
+                )
+            self.best_f1 = best_val_f1
+            
+            if early_stop:
+                print(f"Early stopping triggered at epoch {epoch+1}")
+                break
+            
             history['train_loss'].append(train_loss)
             history['train_auc'].append(train_auc)
             
-            print(f"Train - Loss: {train_loss:.4f}, AUC: {train_auc:.4f}")
-            
-            # Validation
-            if 'val' in dataloaders:
-                val_loss, val_auc, val_pr_auc, val_f1, acc, prec, rec = self.validate(dataloaders['val'],save_dir)
-                history['val_loss'].append(val_loss)
-                history['val_auc'].append(val_auc)
-                history['val_pr_auc'].append(val_pr_auc)
-                history['val_f1'].append(val_f1)
-                history['val_acc'].append(acc)
-                history['val_prec'].append(prec)
-                history['val_rec'].append(rec)
-                
-                print(f"Val   - Loss: {val_loss:.4f}, AUC: {val_auc:.4f}, PR-AUC: {val_pr_auc:.4f}, ACC: {acc:.4f}, PREC: {prec:.4f}, REC: {rec:.4f}, F1: {val_f1:.4f}")
-                
-                # Early stopping and model saving
-                if val_f1 > best_val_f1:
-                    best_val_f1 = val_f1
-                    self.best_f1 = val_f1
-                    patience_counter = 0
-                    best_model_state = copy.deepcopy(self.model.state_dict())
-                    
-                    # Save best model
-                    torch.save({
-                        'model_state_dict': best_model_state,
-                        'optimizer_state_dict': self.optimizer.state_dict(),
-                        'epoch': epoch,
-                        'best_f1': best_val_f1,
-                        'history': history
-                    }, save_path / 'best_model.pth')
-                    
-                    print(f"New best F1: {best_val_f1:.4f}")
-                else:
-                    patience_counter += 1
-                    print(f"No improvement. Patience: {patience_counter}/{patience}")
-                
-                if patience_counter >= patience:
-                    print(f"Early stopping triggered after {epoch+1} epochs")
-                    break
+            print(f"Train - Loss: {train_loss:.4f}, AUC: {train_auc:.4f}, Total Steps: {global_step}")
             
             # Unfreeze after a few epochs for fine-tuning
             if epoch == 5:
@@ -851,11 +880,16 @@ def main():
         print("Using train/validation split (no separate test set)")
 
         # Training configuration
+        val_steps = os.getenv("VAL_STEPS")
+        if not val_steps:
+            raise ValueError("VAL_STEPS environment variable must be set")
+            
         training_config = {
             'epochs': int(os.getenv("EPOCHS")),
             'batch_size': int(os.getenv("BATCH_SIZE")),
             'patience':int(os.getenv("PATIENCE")),
-            'save_dir': str(checkpoints_dir)
+            'save_dir': str(checkpoints_dir),
+            'val_interval_steps': int(val_steps)
         }
 
         print(f"\nTraining Configuration:")
