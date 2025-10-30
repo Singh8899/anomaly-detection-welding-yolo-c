@@ -96,7 +96,7 @@ class WeldAugmentation:
 class WeldingDataset(Dataset):
     """Dataset for welding patch images with binary classification"""
     
-    def __init__(self, data_dir, transform=None, class_type='both', is_training=False, elements_per_class=None):
+    def __init__(self, data_dir, transform=None, class_type='both', is_training=False, elements_per_class=None, balanced=False):
         """
         Initialize dataset
         
@@ -106,16 +106,18 @@ class WeldingDataset(Dataset):
             class_type (str): 'good', 'bad', or 'both'
             is_training (bool): Whether this is training data (for augmentation)
             elements_per_class (int or None): Max number of elements per class to load
+            balanced (boolean): to balance good and bad weld elements 
         """
         self.data_dir = Path(data_dir)
         self.transform = transform
         self.class_type = class_type
         self.is_training = is_training
         self.elements_per_class = elements_per_class
+        self.balanced = balanced
         
         self.image_paths = []
         self.labels = []
-        
+        random.seed(69)
         def load_class(class_name, label):
             class_dir = self.data_dir / class_name
             if not class_dir.exists():
@@ -131,11 +133,31 @@ class WeldingDataset(Dataset):
             return paths, [label] * len(paths)
         
         if class_type == 'both':
-            for class_name, label in [('good', 0), ('bad', 1)]:
-                paths, labels = load_class(class_name, label)
-                self.image_paths.extend(paths)
-                self.labels.extend(labels)
-                print(f"Found {len(paths)} images in {self.data_dir/class_name}")
+            # Load both classes
+            good_paths, good_labels = load_class('good', 0)
+            bad_paths, bad_labels = load_class('bad', 1)
+            
+            print(f"Found {len(good_paths)} images in {self.data_dir/'good'}")
+            print(f"Found {len(bad_paths)} images in {self.data_dir/'bad'}")
+            
+            # Balance classes if requested
+            if self.balanced and len(good_paths) > 0 and len(bad_paths) > 0:
+                min_samples = min(len(good_paths), len(bad_paths))
+                print(f"Balancing dataset: using {min_samples} samples per class")
+                
+                # Shuffle and sample
+                random.shuffle(good_paths)
+                random.shuffle(bad_paths)
+                good_paths = good_paths[:min_samples]
+                bad_paths = bad_paths[:min_samples]
+                good_labels = good_labels[:min_samples]
+                bad_labels = bad_labels[:min_samples]
+            
+            # Combine both classes
+            self.image_paths.extend(good_paths)
+            self.image_paths.extend(bad_paths)
+            self.labels.extend(good_labels)
+            self.labels.extend(bad_labels)
         else:
             label = 0 if class_type == 'good' else 1
             self.image_paths, self.labels = load_class(class_type, label)
@@ -289,12 +311,14 @@ class WeldingClassifier:
         dataloaders = {}
         
         # Training dataloader
+        balanced = os.getenv("BALANCED_DATA")
         train_dataset = WeldingDataset(
             self.train_data_dir,
             transform=self.train_transform,
             class_type='both',
             is_training=True,
-            elements_per_class=None
+            elements_per_class=None,
+            balanced=balanced
         )
         dataloaders['train'] = DataLoader(
             train_dataset,
@@ -310,7 +334,8 @@ class WeldingClassifier:
                 self.val_data_dir,
                 transform=self.val_transform,
                 class_type='both',
-                is_training=False
+                is_training=False,
+                balanced=False
             )
             
             dataloaders['val'] = DataLoader(
