@@ -137,8 +137,6 @@ class WeldingDataset(Dataset):
             good_paths, good_labels = load_class('good', 0)
             bad_paths, bad_labels = load_class('bad', 1)
             
-            print(f"Found {len(good_paths)} images in {self.data_dir/'good'}")
-            print(f"Found {len(bad_paths)} images in {self.data_dir/'bad'}")
             
             # Balance classes if requested
             if self.balanced and len(good_paths) > 0 and len(bad_paths) > 0:
@@ -158,11 +156,14 @@ class WeldingDataset(Dataset):
             self.image_paths.extend(bad_paths)
             self.labels.extend(good_labels)
             self.labels.extend(bad_labels)
+            print(f"Found {len(good_paths)} images in {self.data_dir/'good'}")
+            print(f"Found {len(bad_paths)} images in {self.data_dir/'bad'}")
         else:
             label = 0 if class_type == 'good' else 1
             self.image_paths, self.labels = load_class(class_type, label)
             if len(self.image_paths) == 0:
                 raise ValueError(f"No images found in {self.data_dir/class_type}")
+            
             print(f"Found {len(self.image_paths)} images in {self.data_dir/class_type}")
         
         if len(self.image_paths) == 0:
