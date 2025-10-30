@@ -75,20 +75,20 @@ class WeldAugmentation:
             # Brightness and contrast
             if random.random() < 0.5:
                 enhancer = ImageEnhance.Brightness(image)
-                image = enhancer.enhance(random.uniform(0.8, 1.2))
+                image = enhancer.enhance(random.uniform(0.6, 1.4))
             
             if random.random() < 0.5:
                 enhancer = ImageEnhance.Contrast(image)
-                image = enhancer.enhance(random.uniform(0.8, 1.2))
+                image = enhancer.enhance(random.uniform(0.6, 1.4))
             
             # Sharpness
             if random.random() < 0.3:
                 enhancer = ImageEnhance.Sharpness(image)
-                image = enhancer.enhance(random.uniform(0.8, 1.5))
+                image = enhancer.enhance(random.uniform(0.6, 1.5))
             
             # Small rotation (±5 degrees)
-            if random.random() < 0.3:
-                angle = random.uniform(-5, 5)
+            if random.random() < 0.7:
+                angle = random.uniform(-10, 10)
                 image = image.rotate(angle, fillcolor=(114, 114, 114))
         
         return image
@@ -273,10 +273,15 @@ class WeldingClassifier:
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         
+        negative_weight = torch.tensor(
+            [float(os.getenv("CLASS_GOOD_DISTRIB"))/float(os.getenv("CLASS_BAD_DISTRIB"))], 
+            device=self.device
+        )
+
         # Model and training components
         self.model = None
         self.optimizer = None
-        self.criterion = nn.BCEWithLogitsLoss()
+        self.criterion = nn.BCEWithLogitsLoss(pos_weight=negative_weight)
         self.best_f1 = 0.0
         
     def build_dataloaders(self, batch_size=32):

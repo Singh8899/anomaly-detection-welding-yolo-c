@@ -1,6 +1,7 @@
 import logging
 from formatter import draw_boxes
 
+import xml.etree.ElementTree as ET
 import os
 import cv2
 import numpy as np
@@ -10,9 +11,10 @@ from classes import Detection, InferenceResponse
 from ultralytics import YOLO
 from torchvision import transforms, models
 from PIL import Image
+from pathlib import Path
 
 output_dir = 'pred_results'
-image_path = 'examples/20250730_190642_222398.jpeg'
+# image_path = 'examples/20250730_190642_222398.jpeg'
 
 logger = logging.getLogger(__name__)
 
@@ -164,37 +166,6 @@ class ResnetInference:
         except Exception as e:
             logger.error(f"Error during prediction: {str(e)}")
             raise e
-            
-resnetInference = ResnetInference()
-# Read image as bytes
-with open(image_path, 'rb') as f:
-    image_bytes = f.read()
-
-# Also read the original image for drawing boxes
-original_image = cv2.imread(image_path)
-
-output = resnetInference.predict(
-    image=image_bytes,
-    yolo_threshold=0.5,
-    cnn_threshold=0.5
-)
-# Create InferenceResponse object
-inference_response = InferenceResponse(predictions=output["predictions"])
-
-# Draw boxes on the original image
-annotated_image = draw_boxes(original_image, inference_response, inference_size=IMAGE_SIZE)
-
-# Save the annotated image
-output_filename = 'annotated_image.jpg'
-complete_path = output_dir+"/"+output_filename
-os.makedirs(output_dir, exist_ok=True)
-cv2.imwrite(complete_path, annotated_image)
-print(f"Annotated image saved as: {output_filename}")
-print(f"Found {len(inference_response.predictions)} detections")
-
-
-import os
-import xml.etree.ElementTree as ET
 
 def load_voc_annotations(xml_path):
     """
@@ -255,22 +226,63 @@ def draw_gt_boxes(image_bgr, objects, color_good=(0, 255, 0), color_bad=(0, 0, 2
     return img
 
 
-xml_path = os.path.splitext(image_path)[0] + '.xml'
+resnetInference = ResnetInference()
+
+input_dir = Path("/teamspace/studios/this_studio/downloaded_photos_bad") / "val"
+
+image_files = (
+            list(input_dir.glob("*.jpeg"))
+            + list(input_dir.glob("*.jpg"))
+            + list(input_dir.glob("*.png"))
+        )
+print(len(image_files))
+for i, image_path in enumerate(image_files):
+    # Read image as bytes
+    with open(image_path, 'rb') as f:
+        image_bytes = f.read()
+
+    # Also read the original image for drawing boxes
+    original_image = cv2.imread(image_path)
+
+    output = resnetInference.predict(
+        image=image_bytes,
+        yolo_threshold=0.5,
+        cnn_threshold=0.5
+    )
+    # Create InferenceResponse object
+    inference_response = InferenceResponse(predictions=output["predictions"])
+
+    # Draw boxes on the original image
+    annotated_image = draw_boxes(original_image, inference_response, inference_size=IMAGE_SIZE)
+
+    # Save the annotated image
+    output_filename = f'{i}.jpg'
+    complete_path = output_dir+"/"+output_filename
+    os.makedirs(output_dir, exist_ok=True)
+    cv2.imwrite(complete_path, annotated_image)
+    print(f"Annotated image saved as: {output_filename}")
+    print(f"Found {len(inference_response.predictions)} detections")
 
 
 
-if os.path.exists(xml_path):
-    try:
-        gt_objects = load_voc_annotations(xml_path)
-        annotated_gt_image = draw_gt_boxes(original_image, gt_objects)
-        gt_output_filename = 'annotated_image_gt.jpg'
-        complete_path = output_dir+"/"+gt_output_filename
-        os.makedirs(output_dir, exist_ok=True)
-        cv2.imwrite(complete_path, annotated_gt_image)
-        print(f"GT annotated image saved as: {gt_output_filename}")
-        print(f"Found {len(gt_objects)} ground-truth boxes")
-    except Exception as e:
-        logger.error(f"Failed to draw GT boxes: {e}")
-        print(f"Failed to draw GT boxes: {e}")
-else:
-    print(f"XML not found at: {xml_path}")
+
+
+    xml_path = os.path.splitext(image_path)[0] + '.xml'
+
+
+
+    if os.path.exists(xml_path):
+        try:
+            gt_objects = load_voc_annotations(xml_path)
+            annotated_gt_image = draw_gt_boxes(original_image, gt_objects)
+            gt_output_filename = f'{i}_gt.jpg'
+            complete_path = output_dir+"/"+gt_output_filename
+            os.makedirs(output_dir, exist_ok=True)
+            cv2.imwrite(complete_path, annotated_gt_image)
+            print(f"GT annotated image saved as: {gt_output_filename}")
+            print(f"Found {len(gt_objects)} ground-truth boxes")
+        except Exception as e:
+            logger.error(f"Failed to draw GT boxes: {e}")
+            print(f"Failed to draw GT boxes: {e}")
+    else:
+        print(f"XML not found at: {xml_path}")
